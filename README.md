@@ -2,7 +2,7 @@ GEETEST_TEST
 -----------------------
 1. 致谢 https://github.com/OSinoooO/bilibili_geetest 和 https://github.com/Kevin-Cherish/geetest
 1. 本代码仅作为本人研究和学习的备份，请各位勿用于其他用途，本人保留一切追究权利，不过我这人比较懒，可能懒得追究
-1. 本代码运行流程为安装 **python3.8**，运行 `client.py` 和 `server.py`， 若出现 `_pickle.UnpicklingError: the STRING opcode argument must be quoted` 请运行 `conf/t_dict.py` 转换格式
+1. 本代码运行流程为安装 **python3.8**，运行 `client.py` 和 `server.py`， 若出现 `_pickle.UnpicklingError: the STRING opcode argument must be quoted` 请运行 [t_dict.py](server_core/conf/t_dict.py) 转换格式
 
 
 解答疑问
