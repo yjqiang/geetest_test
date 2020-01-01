@@ -11,8 +11,8 @@ from client_core import utils
 
 class Bili:
     def __init__(self):
-        dict_user = utils.get_1st_user('conf/user.toml')
-        dict_bili = utils.get_dict_bili('conf/bili.toml')
+        dict_user = utils.get_1st_user('client_core/conf/user.toml')
+        dict_bili = utils.get_dict_bili('client_core/conf/bili.toml')
         self.user = utils.new_user(dict_user, dict_bili)
 
         self.name = self.user.name

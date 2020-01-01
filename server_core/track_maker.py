@@ -5,7 +5,7 @@ import random
 
 class TrackMaker:
     def __init__(self):
-        self.t_dict = pickle.load(open('conf/t_dict.pkl', 'rb'))
+        self.t_dict = pickle.load(open('server_core/conf/t_dict.pkl', 'rb'))
 
     @staticmethod
     def get_track_fast(distance):
