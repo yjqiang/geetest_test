@@ -6,6 +6,9 @@ import numpy as np
 from skimage.metrics import structural_similarity
 
 
+ALPHA_THRESHOLD = 200
+
+
 # 使用边缘检测模糊确定缺口位置
 def _check_gap_position_roughly(reordered_fullbg_img: np.ndarray, reordered_bg_img: np.ndarray) \
         -> Tuple[int, int, int, int]:
@@ -62,7 +65,7 @@ def _check_gap_position_roughly(reordered_fullbg_img: np.ndarray, reordered_bg_i
 # 根据图片 ALPHA 通道切割豁口图片
 def _crop_gap_img(gap_img: np.ndarray):
     alpha_channel = gap_img[:, :, 3]
-    filter_alpha = alpha_channel <= 150
+    filter_alpha = alpha_channel <= ALPHA_THRESHOLD
     gap_height, gap_width = gap_img.shape[:2]
 
     left = right = up = down = -1
@@ -106,8 +109,9 @@ def _search(
                                        )
                 score = structural_similarity(matched_img, rgb_gap_img, multichannel=True)
                 cache[(x, y)] = score
-            # 0.6 评分基本就够了
-            if score >= 0.6:
+            # 0.7 评分基本就够了
+            if score >= 0.7:
+                print('匹配图片提前结束', (x, y, score))
                 return x, y
             if score >= 0.5:
                 result.append((x, y, score))
@@ -137,7 +141,7 @@ def check_gap_position(
 
     # 整个搜索过程以中心处开始，一圈一圈扩散式搜索；实际代码还是按行按列的，加一个 cache 防止重复扫描
     cache = {}
-    filter_alpha = (cropped_gap_img[:, :, 3] <= 150)[:, :, np.newaxis]
+    filter_alpha = (cropped_gap_img[:, :, 3] <= ALPHA_THRESHOLD)[:, :, np.newaxis]
     for step in (5, 9, 14, 20):
         area_left = max(0, left - step)
         area_up = max(0, up - step)
@@ -159,7 +163,7 @@ def check_gap_position(
         gap_height, gap_width = gap_img.shape[:2]
         for i in range(gap_height):
             for j in range(gap_width):
-                if gap_img[i, j][3] >= 150:
+                if gap_img[i, j][3] >= ALPHA_THRESHOLD:
                     reordered_bg_img[y + i, x + j] = gap_img[i, j][:3]
 
         cv2.line(reordered_bg_img, (x, 0), (x, height), (0, 0, 255), 1)
