@@ -88,7 +88,7 @@ def _crop_gap_img(gap_img: np.ndarray):
 
 
 def _search(
-        gap_img: np.ndarray, reordered_fullbg_img: np.ndarray,
+        gap_img: np.ndarray, reordered_fullbg_img: np.ndarray, filter_alpha: np.ndarray,
         left: int, up: int, right: int, down: int, cache: dict) -> Tuple[int, int]:
     gap_height, gap_width = gap_img.shape[:2]
     result = []
@@ -99,14 +99,11 @@ def _search(
             if (x, y) in cache:
                 score = cache[(x, y)]
             else:
-                matched_img = reordered_fullbg_img[y: y + gap_height, x: x + gap_width].copy()
-                # 对每张图片进行过滤 alpha 操作
-                for i in range(gap_height):
-                    for j in range(gap_width):
-                        if gap_img[i, j][3] <= 150:
-                            matched_img[i, j] = rgb_gap_img[i, j]
-                            # matched_img.itemset((i, j, 2), rgb_gap_img.item(i, j, 2))
 
+                matched_img = np.where(filter_alpha,
+                                       rgb_gap_img,
+                                       reordered_fullbg_img[y: y + gap_height, x: x + gap_width]
+                                       )
                 score = structural_similarity(matched_img, rgb_gap_img, multichannel=True)
                 cache[(x, y)] = score
             # 0.6 评分基本就够了
@@ -140,17 +137,19 @@ def check_gap_position(
 
     # 整个搜索过程以中心处开始，一圈一圈扩散式搜索；实际代码还是按行按列的，加一个 cache 防止重复扫描
     cache = {}
-    for step in (5, 10, 15, 20):
-        left = max(0, left - step)
-        up = max(0, up - step)
-        right = min(width - 1, right + step)
-        down = min(height - 1, down + step)
+    filter_alpha = (cropped_gap_img[:, :, 3] <= 150)[:, :, np.newaxis]
+    for step in (5, 9, 14, 20):
+        area_left = max(0, left - step)
+        area_up = max(0, up - step)
+        area_right = min(width - 1, right + step)
+        area_down = min(height - 1, down + step)
 
-        cv2.rectangle(reordered_bg_img, (left, up), (right, down), (255, 0, 0), 1)
+        cv2.rectangle(reordered_bg_img, (area_left, area_up), (area_right, area_down), (255, 0, 0), 1)
         # cv2.imshow("reordered_bg_img1", reordered_bg_img)
         # cv2.waitKey()
 
-        x, y = _search(cropped_gap_img, reordered_fullbg_img, left=left, up=up, right=right, down=down, cache=cache)
+        x, y = _search(cropped_gap_img, reordered_fullbg_img, filter_alpha,
+                       left=area_left, up=area_up, right=area_right, down=area_down, cache=cache)
         if x >= 0 and y >= 0:
             break
 
