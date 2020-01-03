@@ -13,7 +13,6 @@ from selenium.webdriver.common.action_chains import ActionChains
 
 from web_session import WebSession
 
-session = WebSession()
 reorder_list = [
     (-157, -58),
     (-145, -58),
@@ -75,19 +74,18 @@ class Cracker:
 
     def __init__(self, executable_path=None):
         options = webdriver.ChromeOptions()
-        options.add_argument("log-level=3")
-        options.add_argument("disable-infobars")
-        options.add_argument("window-size=350,560")
+        options.add_argument("--log-level=3")
+        options.add_argument("--window-size=350,560")
 
         self.driver = webdriver.Chrome(
             executable_path,
             options=options)
+        self.session = WebSession()
 
     @staticmethod
     def __bytes2cvimg(content: bytes) -> np.ndarray:
         arr = np.asarray(bytearray(content), dtype=np.uint8)
-        img = cv2.imdecode(arr, cv2.IMREAD_UNCHANGED)  # 'Load it as it is'
-        return img
+        return cv2.imdecode(arr, cv2.IMREAD_UNCHANGED)  # 'Load it as it is'
 
     @staticmethod
     def __reorder_img(unordered_img: np.ndarray) -> np.ndarray:
@@ -111,7 +109,7 @@ class Cracker:
     def __fetch_unordered_img(self, css_selector: str) -> np.ndarray:
         element = self.driver.find_element_by_css_selector(css_selector)
         img_url = element.get_attribute('href')
-        unordered_img = self.__bytes2cvimg(session.request_binary('GET', img_url))
+        unordered_img = self.__bytes2cvimg(self.session.request_binary('GET', img_url))
         # cv2.imshow('unordered_img', unordered_img)
 
         return unordered_img
@@ -166,16 +164,13 @@ class Cracker:
         return reordered_fullbg_img, reordered_bg_img, gap_img
 
     def position2actual_distance(self, reordered_bg_img: np.ndarray) -> float:
-
+        # 进度条
         element = self.driver.find_element_by_css_selector('svg > g:last-child')
-        # 进度条截图
-        img1 = self.__bytes2cvimg(element.screenshot_as_png)
 
         # https://stackoverflow.com/questions/51996121/screenshot-an-element-with-python-selenium-shows-image-of-wrong-section-of-scree
-        screenshot_width = self.__bytes2cvimg(self.driver.get_screenshot_as_png()).shape[1]
-        website_width = self.driver.execute_script("return document.body.clientWidth")
+        # 但我测试发现：get_screenshot_as_png 与 the actual window size 的宽度比例始终为 1.0，应该修复了。在此仅作为日志
 
-        ratio = (img1.shape[1] / reordered_bg_img.shape[1]) * (website_width / screenshot_width)
+        ratio = element.rect['width'] / reordered_bg_img.shape[1]
         return ratio
 
     def slide_slider(self, track, ratio):
