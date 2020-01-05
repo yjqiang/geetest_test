@@ -179,7 +179,8 @@ class Cracker:
         ActionChains(self.driver).click_and_hold(element).perform()
         assert (track[1][0], track[1][1], track[1][2]) == (0, 0, 0)
 
-        real_track = [(x*ratio, y) for x, y, _ in track]
+        real_track = [(int(x*ratio), y) for x, y, _ in track]
+
         actions = ActionChains(self.driver)
         for i in range(2, len(real_track), 1):
             actions.move_by_offset(
