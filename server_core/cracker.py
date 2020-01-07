@@ -10,7 +10,6 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.action_chains import ActionChains
 
-
 from web_session import WebSession
 
 reorder_list = [
@@ -71,24 +70,30 @@ reorder_list = [
 
 class Cracker:
     DELAY = 5
+    CSS_SELECTOR_FULLBG_IMG = 'svg > defs > g[id=gt_fullbg_1] > g > image'
+    CSS_SELECTOR_BG_IMG = 'svg > defs > g[id = gt_bg_1] > g > image'
+    CSS_SELECTOR_GAP_IMG = 'a[target=_blank] > image'
 
-    def __init__(self, executable_path=None):
-        options = webdriver.ChromeOptions()
-        options.add_argument("--log-level=3")
-        options.add_argument("--window-size=350,560")
+    def __init__(self, executable_path=None, no_selenium=False):
+        if no_selenium:
+            self.driver = None
+        else:
+            options = webdriver.ChromeOptions()
+            options.add_argument("--log-level=3")
+            options.add_argument("--window-size=350,560")
 
-        self.driver = webdriver.Chrome(
-            executable_path,
-            options=options)
+            self.driver = webdriver.Chrome(
+                executable_path,
+                options=options)
         self.session = WebSession()
 
-    @staticmethod
-    def __bytes2cvimg(content: bytes) -> np.ndarray:
+    def download_img(self, img_url: str) -> np.ndarray:
+        content = self.session.request_binary('GET', img_url)
         arr = np.asarray(bytearray(content), dtype=np.uint8)
         return cv2.imdecode(arr, cv2.IMREAD_UNCHANGED)  # 'Load it as it is'
 
     @staticmethod
-    def __reorder_img(unordered_img: np.ndarray) -> np.ndarray:
+    def reorder_img(unordered_img: np.ndarray) -> np.ndarray:
         reordered_img = np.zeros((unordered_img.shape[0], 260, *unordered_img.shape[2:]), np.uint8)
         x_upper = 0
         x_lower = 0
@@ -106,33 +111,25 @@ class Cracker:
 
         return reordered_img
 
-    def __fetch_unordered_img(self, css_selector: str) -> np.ndarray:
-        element = self.driver.find_element_by_css_selector(css_selector)
-        img_url = element.get_attribute('href')
-        unordered_img = self.__bytes2cvimg(self.session.request_binary('GET', img_url))
-        # cv2.imshow('unordered_img', unordered_img)
-
-        return unordered_img
-
     def load_url(self, url=None) -> int:
         if url is not None:
             self.driver.get(url)
         try:
             WebDriverWait(self.driver, self.DELAY).until(
-                    EC.presence_of_element_located(
-                        (
-                            By.CSS_SELECTOR,
-                            'svg > defs > g[id=gt_fullbg_1] > g > image[href], div[class=error-box] span[class]'
-                        )
-                    ),
+                EC.presence_of_element_located(
+                    (
+                        By.CSS_SELECTOR,
+                        f'{self.CSS_SELECTOR_FULLBG_IMG}, div[class=error-box] span[class]'
+                    )
+                ),
             )
-            if not self.driver.find_elements_by_css_selector('svg > defs > g[id=gt_fullbg_1] > g > image[href]'):
+            if not self.driver.find_elements_by_css_selector(self.CSS_SELECTOR_FULLBG_IMG):
                 print("页面异常，即将自动重新刷新")
                 return 1
 
             WebDriverWait(self.driver, self.DELAY).until(
                 EC.presence_of_element_located(
-                    (By.CSS_SELECTOR, 'svg > defs > g[id=gt_bg_1] > g > image[href]')
+                    (By.CSS_SELECTOR, self.CSS_SELECTOR_BG_IMG)
                 )
             )
             print("页面正常加载完毕")
@@ -145,12 +142,15 @@ class Cracker:
         self.driver.find_element_by_css_selector('div[class=error-box] span[class]').click()
 
     def fetch_imgs(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        unordered_fullbg_img = self.__fetch_unordered_img("svg > defs > g[id=gt_fullbg_1] > g > image")
-        unordered_bg_img = self.__fetch_unordered_img("svg > defs > g[id = gt_bg_1] > g > image")
-        gap_img = self.__fetch_unordered_img("a[target=_blank] > image")
+        unordered_fullbg_img = self.download_img(
+            self.driver.find_element_by_css_selector(self.CSS_SELECTOR_FULLBG_IMG).get_attribute('href'))
+        unordered_bg_img = self.download_img(
+            self.driver.find_element_by_css_selector(self.CSS_SELECTOR_BG_IMG).get_attribute('href'))
+        gap_img = self.download_img(
+            self.driver.find_element_by_css_selector(self.CSS_SELECTOR_GAP_IMG).get_attribute('href'))
 
-        reordered_fullbg_img = self.__reorder_img(unordered_fullbg_img)
-        reordered_bg_img = self.__reorder_img(unordered_bg_img)
+        reordered_fullbg_img = self.reorder_img(unordered_fullbg_img)
+        reordered_bg_img = self.reorder_img(unordered_bg_img)
 
         # cv2.imshow('reordered_fullbg_img', reordered_fullbg_img)
         # cv2.imshow('reordered_bg_img', reordered_bg_img)
@@ -179,13 +179,13 @@ class Cracker:
         ActionChains(self.driver).click_and_hold(element).perform()
         assert (track[1][0], track[1][1], track[1][2]) == (0, 0, 0)
 
-        real_track = [(int(x*ratio), y) for x, y, _ in track]
+        real_track = [(int(x * ratio), y) for x, y, _ in track]
 
         actions = ActionChains(self.driver)
         for i in range(2, len(real_track), 1):
             actions.move_by_offset(
-                xoffset=(real_track[i][0]-real_track[i-1][0]),
-                yoffset=(real_track[i][1]-real_track[i-1][1]))
+                xoffset=(real_track[i][0] - real_track[i - 1][0]),
+                yoffset=(real_track[i][1] - real_track[i - 1][1]))
         actions.perform()
         time.sleep(0.6)
         ActionChains(self.driver).release().perform()
@@ -193,8 +193,8 @@ class Cracker:
     def test_slide_slider(self, distance, ratio):
         element = self.driver.find_element_by_css_selector('svg > g > g[transform][style]')
         ActionChains(self.driver).click_and_hold(element).perform()
-        ActionChains(self.driver).\
-            move_by_offset(xoffset=(distance*ratio), yoffset=0).\
+        ActionChains(self.driver). \
+            move_by_offset(xoffset=(distance * ratio), yoffset=0). \
             perform()
         time.sleep(1.0)
         ActionChains(self.driver).release().perform()
