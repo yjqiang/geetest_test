@@ -1,4 +1,4 @@
-requests==2.22.0
+requests==2.23.0
 toml==0.10.0
 selenium==3.141.0
 scikit-image==0.16.2
