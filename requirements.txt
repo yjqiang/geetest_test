@@ -1,7 +1,7 @@
 requests==2.23.0
 toml==0.10.0
 selenium==3.141.0
-scikit-image==0.16.2
+scikit-image==0.17.2
 opencv_python==4.2.0.34
 numpy==1.18.4
 flask==1.1.2
