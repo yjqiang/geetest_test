@@ -1,5 +1,5 @@
 requests==2.23.0
-toml==0.10.0
+toml==0.10.1
 selenium==3.141.0
 scikit-image==0.17.2
 opencv_python==4.2.0.34
