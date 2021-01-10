@@ -5,4 +5,4 @@ scikit-image==0.17.2
 opencv_python==4.4.0.42
 numpy==1.19.1
 flask==1.1.2
-rsa==4.6
+rsa==4.7
