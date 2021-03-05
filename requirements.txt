@@ -1,8 +1,8 @@
-requests==2.24.0
-toml==0.10.1
+requests==2.25.1
+toml==0.10.2
 selenium==3.141.0
-scikit-image==0.17.2
-opencv_python==4.4.0.42
-numpy==1.19.1
+scikit-image==0.18.1
+opencv_python==4.5.1.48
+numpy==1.20.1
 flask==1.1.2
-rsa==4.6
+rsa==4.7.2
