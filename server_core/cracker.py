@@ -70,9 +70,9 @@ reorder_list = [
 
 class Cracker:
     DELAY = 5
-    CSS_SELECTOR_FULLBG_IMG = 'svg > defs > g[id=gt_fullbg_1] > g > image'
-    CSS_SELECTOR_BG_IMG = 'svg > defs > g[id = gt_bg_1] > g > image'
-    CSS_SELECTOR_GAP_IMG = 'a[target=_blank] > image'
+    CSS_SELECTOR_FULLBG_IMG = 'svg > defs > g[id=gt_fullbg_1] > g > image[href]'
+    CSS_SELECTOR_BG_IMG = 'svg > defs > g[id = gt_bg_1] > g > image[href]'
+    CSS_SELECTOR_GAP_IMG = 'a[target=_blank] > image[href]'
 
     def __init__(self, executable_path=None, no_selenium=False):
         if no_selenium:
@@ -129,7 +129,17 @@ class Cracker:
 
             WebDriverWait(self.driver, self.DELAY).until(
                 EC.presence_of_element_located(
+                    (By.CSS_SELECTOR, self.CSS_SELECTOR_FULLBG_IMG)
+                )
+            )
+            WebDriverWait(self.driver, self.DELAY).until(
+                EC.presence_of_element_located(
                     (By.CSS_SELECTOR, self.CSS_SELECTOR_BG_IMG)
+                )
+            )
+            WebDriverWait(self.driver, self.DELAY).until(
+                EC.presence_of_element_located(
+                    (By.CSS_SELECTOR, self.CSS_SELECTOR_GAP_IMG)
                 )
             )
             print("页面正常加载完毕")

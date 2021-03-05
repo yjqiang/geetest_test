@@ -4,10 +4,9 @@ from server_core.cracker import Cracker
 from server_core.track_maker import TrackMaker
 from server_core.find_gap_position import check_gap_position
 
+track_maker = TrackMaker()
 
 app = Flask(__name__)
-
-track_maker = TrackMaker()
 
 
 @app.route("/")
@@ -25,10 +24,9 @@ def crack():
     data = request.get_json()
     print(data['url'])
 
-    cracker = Cracker()
+    cracker = Cracker('C:/Program Files (x86)/Google/Chrome/Application/chromedriver.exe')
 
     load_result = cracker.load_url(url=data['url'])
-
     while load_result:
         cracker.refresh()
         load_result = cracker.load_url()
@@ -48,7 +46,7 @@ def crack():
     distance = gap_position
     track = track_maker.choice_track(distance)
 
-    print('生成的轨迹', distance, distance*ratio, track)
+    print('生成的轨迹', distance, ratio, distance * ratio, track)
 
     # cracker.slide_slider(track, ratio)
     cracker.test_slide_slider(distance, ratio)
