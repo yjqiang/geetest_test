@@ -1,28 +1,30 @@
-import time
 import base64
 from urllib import parse
+import asyncio
+from typing import Optional, Tuple, Any
+import time
 
 import rsa
 
 from printer import info as print
-from web_session import WebSession
+from aiohttp_websession import WebSession
 from client_core import utils
 
 
 class Bili:
-    def __init__(self):
+    def __init__(self, web_session: WebSession):
         dict_user = utils.get_1st_user('client_core/conf/user.toml')
         dict_bili = utils.get_dict_bili('client_core/conf/bili.toml')
         self.user = utils.new_user(dict_user, dict_bili)
 
         self.name = self.user.name
         self.password = self.user.password
-        self.__web_session = WebSession()
+        self._web_session = web_session
 
-    def get_key(self):
+    async def get_key(self) -> Tuple[str, str]:
         url = f'https://passport.bilibili.com/api/oauth2/getKey'
         params = self.user.sort_and_sign()
-        json_rsp = self.__web_session.request_json(
+        json_rsp = await self._web_session.request_json(
             'POST', url, headers=self.user.dict_bili['appheaders'], params=params)
 
         data = json_rsp['data']
@@ -37,61 +39,66 @@ class Bili:
 
         return url_password, url_name
 
-    def login(self, url_password, url_name, seccode, challenge, validate):
-
+    async def login(self, url_password: str, url_name: str, seccode: str, challenge: str, validate: str) -> Optional[str]:
         extra_params = [
             # f'captcha=',
             f'password={url_password}',
             f'username={url_name}',
             f'ts={utils.curr_time()}',
-            f'seccode={"" if not seccode else parse.quote_plus(seccode)}',
-            f'challenge={"" if not challenge else parse.quote_plus(challenge)}',
-            f'validate={"" if not validate else parse.quote_plus(validate)}',
+            f'seccode={parse.quote_plus(seccode)}',
+            f'challenge={parse.quote_plus(challenge)}',
+            f'validate={parse.quote_plus(validate)}',
 
         ]
         params = self.user.sort_and_sign(extra_params)
-        print(params)
 
-        url = 'https://passport.bilibili.com/api/v3/oauth2/login'
+        url = f'https://passport.bilibili.com/api/v3/oauth2/login?{params}'
 
-        json_rsp = self.__web_session.request_json(
-            'POST', url, headers=self.user.dict_bili['appheaders'], params=params)
-        print(json_rsp)
+        json_rsp = await self._web_session.request_json(
+            'POST', url, headers=self.user.dict_bili['appheaders'], params=None)
+        print(f'login response: {json_rsp}')
         if json_rsp['code'] == -105:
             url = json_rsp['data']['url']
             return url
-        raise Exception('get_captcha', json_rsp)
+        return None
 
 
 class CrackClient:
-    def __init__(self, url):
-        self.__web_session = WebSession()
-        self.__url = url
+    def __init__(self, url, web_session: WebSession):
+        self._web_session = web_session
+        self._url = url
 
-    def request_crack(self, url):
+    async def request_crack(self, url: str) -> Any:
         data = {
             'url': url,
         }
-        json_rsp = self.__web_session.request_json('POST', f'{self.__url}/crack', json=data)
+        json_rsp = await self._web_session.request_json('POST', f'{self._url}/crack', json=data, keep_try=False)
         return json_rsp
 
 
-def main():
-    bili = Bili()
-    crack_client = CrackClient('http://127.0.0.1:3333')
+async def one_try():
+    web_session = WebSession()
+    bili = Bili(web_session)
+    crack_client = CrackClient('http://127.0.0.1:3333', web_session)
+    args = await bili.get_key()
     while True:
-        args = bili.get_key()
-        url = bili.login(*args, '', '', '')
-        print(f'url {url}')
-        result = crack_client.request_crack(url=url)
-        print(f'Result: {result}')
-        print('=' * 100, need_timestamp=False)
-        if not result['code']:
-            data = result['data']
-            bili.login(*args, challenge=data['challenge'], seccode=data['seccode'], validate=data['validate'])
+        url = await bili.login(*args, '', '', '')
+        if url is not None:
+            break
+    print(f'url {url}')
+    result = await crack_client.request_crack(url=url)
+    print(f'request_crack result: {result}')
+    if not result['code']:
+        data = result['data']
+        await bili.login(*args, challenge=data['challenge'], seccode=data['seccode'], validate=data['validate'])
+    await web_session.session.close()
 
-        time.sleep(5)
+
+async def main():
+    start_time = time.time()
+    await asyncio.gather(*[one_try() for _ in range(4)])
+    print("--- %s seconds ---" % (time.time() - start_time))
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.get_event_loop().run_until_complete(main())

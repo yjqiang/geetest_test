@@ -1,16 +1,11 @@
-from typing import Tuple
-import time
+from typing import Tuple, Optional
+import asyncio
 
 import cv2
 import numpy as np
-from selenium import webdriver
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.common.exceptions import TimeoutException
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.common.action_chains import ActionChains
+from playwright.async_api import Page, TimeoutError
 
-from web_session import WebSession
+from aiohttp_websession import WebSession
 
 reorder_list = [
     (-157, -58),
@@ -70,25 +65,20 @@ reorder_list = [
 
 class Cracker:
     DELAY = 5
-    CSS_SELECTOR_FULLBG_IMG = 'svg > defs > g[id=gt_fullbg_1] > g > image[href]'
-    CSS_SELECTOR_BG_IMG = 'svg > defs > g[id = gt_bg_1] > g > image[href]'
+    CSS_SELECTOR_FULLBG_IMG = 'g[id=gt_fullbg_1] > g > image[href]'
+    CSS_SELECTOR_BG_IMG = 'g[id=gt_bg_1] > g > image[href]'
     CSS_SELECTOR_GAP_IMG = 'a[target=_blank] > image[href]'
 
-    def __init__(self, executable_path=None, no_selenium=False):
-        if no_selenium:
-            self.driver = None
-        else:
-            options = webdriver.ChromeOptions()
-            options.add_argument("--log-level=3")
-            options.add_argument("--window-size=350,560")
+    CSS_SELECTOR_GEETEST_CHALLENGE = 'input[class=geetest_challenge][value]'  # 滑动成功后 value 查看
+    CSS_SELECTOR_GEETEST_SECCODE = 'input[class=geetest_seccode][value]'  # 滑动成功后 value 查看
+    CSS_SELECTOR_VALIDATE = 'input[class=geetest_validate][value]'  # 滑动成功后 value 查看
 
-            self.driver = webdriver.Chrome(
-                executable_path,
-                options=options)
-        self.session = WebSession()
+    def __init__(self, page: Page, session: WebSession):
+        self.session = session
+        self.page = page
 
-    def download_img(self, img_url: str) -> np.ndarray:
-        content = self.session.request_binary('GET', img_url)
+    async def download_img(self, img_url: str) -> np.ndarray:
+        content = await self.session.request_binary('GET', img_url)
         arr = np.asarray(bytearray(content), dtype=np.uint8)
         return cv2.imdecode(arr, cv2.IMREAD_UNCHANGED)  # 'Load it as it is'
 
@@ -111,53 +101,36 @@ class Cracker:
 
         return reordered_img
 
-    def load_url(self, url=None) -> int:
+    async def load_url(self, url: Optional[str] = None) -> int:
         if url is not None:
-            self.driver.get(url)
+            await self.page.goto(url)
         try:
-            WebDriverWait(self.driver, self.DELAY).until(
-                EC.presence_of_element_located(
-                    (
-                        By.CSS_SELECTOR,
-                        f'{self.CSS_SELECTOR_FULLBG_IMG}, div[class=error-box] span[class]'
-                    )
-                ),
-            )
-            if not self.driver.find_elements_by_css_selector(self.CSS_SELECTOR_FULLBG_IMG):
+            await self.page.wait_for_selector(f'{self.CSS_SELECTOR_FULLBG_IMG}, div[class=error-box] span[class]', state='attached')  # 加载出来正常信息或者错误信息了
+            if await self.page.query_selector(self.CSS_SELECTOR_FULLBG_IMG) is None:
                 print("页面异常，即将自动重新刷新")
                 return 1
 
-            WebDriverWait(self.driver, self.DELAY).until(
-                EC.presence_of_element_located(
-                    (By.CSS_SELECTOR, self.CSS_SELECTOR_FULLBG_IMG)
-                )
-            )
-            WebDriverWait(self.driver, self.DELAY).until(
-                EC.presence_of_element_located(
-                    (By.CSS_SELECTOR, self.CSS_SELECTOR_BG_IMG)
-                )
-            )
-            WebDriverWait(self.driver, self.DELAY).until(
-                EC.presence_of_element_located(
-                    (By.CSS_SELECTOR, self.CSS_SELECTOR_GAP_IMG)
-                )
-            )
+            await self.page.wait_for_selector(self.CSS_SELECTOR_FULLBG_IMG, state='attached')
+
+            await self.page.wait_for_selector(self.CSS_SELECTOR_BG_IMG, state='attached')
+
+            await self.page.wait_for_selector(self.CSS_SELECTOR_GAP_IMG, state='attached')
+
             print("页面正常加载完毕")
             return 0
-        except TimeoutException:
+        except TimeoutError:
             print("页面超时")
             return -1
 
-    def refresh(self):
-        self.driver.find_element_by_css_selector('div[class=error-box] span[class]').click()
+    async def refresh(self) -> None:
+        await self.page.click('div[class=error-box] span[class]')
 
-    def fetch_imgs(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        unordered_fullbg_img = self.download_img(
-            self.driver.find_element_by_css_selector(self.CSS_SELECTOR_FULLBG_IMG).get_attribute('href'))
-        unordered_bg_img = self.download_img(
-            self.driver.find_element_by_css_selector(self.CSS_SELECTOR_BG_IMG).get_attribute('href'))
-        gap_img = self.download_img(
-            self.driver.find_element_by_css_selector(self.CSS_SELECTOR_GAP_IMG).get_attribute('href'))
+    async def fetch_imgs(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        unordered_fullbg_img, unordered_bg_img, gap_img = await asyncio.gather(
+            self.download_img(await self.page.get_attribute(self.CSS_SELECTOR_FULLBG_IMG, 'href')),
+            self.download_img(await self.page.get_attribute(self.CSS_SELECTOR_BG_IMG, 'href')),
+            self.download_img(await self.page.get_attribute(self.CSS_SELECTOR_GAP_IMG, 'href'))
+        )
 
         reordered_fullbg_img = self.reorder_img(unordered_fullbg_img)
         reordered_bg_img = self.reorder_img(unordered_bg_img)
@@ -173,61 +146,49 @@ class Cracker:
 
         return reordered_fullbg_img, reordered_bg_img, gap_img
 
-    def position2actual_distance(self, reordered_bg_img: np.ndarray) -> float:
+    async def position2actual_distance(self, reordered_bg_img: np.ndarray) -> float:
         # 进度条
-        element = self.driver.find_element_by_css_selector('svg > g:last-child')
+        element = await self.page.query_selector('svg > g:last-child')
 
-        # https://stackoverflow.com/questions/51996121/screenshot-an-element-with-python-selenium-shows-image-of-wrong-section-of-scree
-        # 但我测试发现：get_screenshot_as_png 与 the actual window size 的宽度比例始终为 1.0，应该修复了。在此仅作为日志
-
-        ratio = element.rect['width'] / reordered_bg_img.shape[1]
+        ratio = (await element.bounding_box())['width'] / reordered_bg_img.shape[1]
         return ratio
 
-    def slide_slider(self, track, ratio):
-        element = self.driver.find_element_by_css_selector('svg > g > g[transform][style]')
-
-        ActionChains(self.driver).click_and_hold(element).perform()
+    async def slide_slider(self, track, ratio: float) -> None:
+        box = await (await self.page.query_selector('g[style] > circle[style]')).bounding_box()
+        box_pos_x = box['x'] + box['width'] / 2
+        box_pos_y = box['y'] + box['height'] / 2
         assert (track[1][0], track[1][1], track[1][2]) == (0, 0, 0)
 
         real_track = [(int(x * ratio), y) for x, y, _ in track]
 
-        actions = ActionChains(self.driver)
+        await self.page.mouse.move(box_pos_x, box_pos_y)
+        await self.page.mouse.down()
         for i in range(2, len(real_track), 1):
-            actions.move_by_offset(
-                xoffset=(real_track[i][0] - real_track[i - 1][0]),
-                yoffset=(real_track[i][1] - real_track[i - 1][1]))
-        actions.perform()
-        time.sleep(0.6)
-        ActionChains(self.driver).release().perform()
+            await self.page.mouse.move(box_pos_x + real_track[i][0] - real_track[i - 1][0], box_pos_y + real_track[i][1] - real_track[i - 1][1])
+        await asyncio.sleep(1)
+        await self.page.mouse.up()
 
-    def test_slide_slider(self, distance, ratio):
-        element = self.driver.find_element_by_css_selector('svg > g > g[transform][style]')
-        ActionChains(self.driver).click_and_hold(element).perform()
-        ActionChains(self.driver). \
-            move_by_offset(xoffset=(distance * ratio), yoffset=0). \
-            perform()
-        time.sleep(1.0)
-        ActionChains(self.driver).release().perform()
+    async def test_slide_slider(self, distance: int, ratio: float) -> None:
+        box = await (await self.page.query_selector('g[style] > circle[style]')).bounding_box()
+        box_pos_x = box['x'] + box['width'] / 2
+        box_pos_y = box['y'] + box['height'] / 2
 
-    def get_result(self):
+        await self.page.mouse.move(box_pos_x, box_pos_y + 1)
+        await asyncio.sleep(0.3)
+        await self.page.mouse.move(box_pos_x, box_pos_y)
+
+        await self.page.mouse.down()
+        await self.page.mouse.move(box_pos_x + distance * ratio, box_pos_y)
+        await asyncio.sleep(1.5)
+        await self.page.mouse.up()
+
+    async def get_result(self) -> Tuple[str, str, str]:
         try:
-            # geetest_seccode geetest_challenge geetest_validate
-            WebDriverWait(self.driver, self.DELAY).until(
-                EC.presence_of_element_located(
-                    (
-                        By.CSS_SELECTOR,
-                        '[class=geetest_challenge][value]'
-                    )
-                ),
-            )
-            element = self.driver.find_element_by_css_selector('[class=geetest_seccode][value]')
-            geetest_seccode = element.get_attribute('value')
-            element = self.driver.find_element_by_css_selector('[class=geetest_challenge][value]')
-            geetest_challenge = element.get_attribute('value')
-            element = self.driver.find_element_by_css_selector('[class=geetest_validate][value]')
-            geetest_validate = element.get_attribute('value')
-
+            await self.page.wait_for_selector(self.CSS_SELECTOR_GEETEST_SECCODE, state='attached')
+            geetest_seccode = await self.page.get_attribute(self.CSS_SELECTOR_GEETEST_SECCODE, 'value')
+            geetest_challenge = await self.page.get_attribute(self.CSS_SELECTOR_GEETEST_CHALLENGE, 'value')
+            geetest_validate = await self.page.get_attribute(self.CSS_SELECTOR_VALIDATE, 'value')
             return geetest_seccode, geetest_challenge, geetest_validate
-        except TimeoutException:
+        except TimeoutError:
             print("FAILED")
-            return None, None, None
+            return '', '', ''
