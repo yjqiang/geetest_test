@@ -1,0 +1,33 @@
+version: 2
+updates:
+- package-ecosystem: pip
+  directory: "/"
+  schedule:
+    interval: daily
+  open-pull-requests-limit: 99
+  ignore:
+  - dependency-name: playwright
+    versions:
+    - 1.9.2
+  - dependency-name: rsa
+    versions:
+    - "4.7"
+    - 4.7.1
+    - 4.7.2
+  - dependency-name: numpy
+    versions:
+    - 1.19.5
+    - 1.20.0
+    - 1.20.1
+  - dependency-name: opencv-python
+    versions:
+    - 4.5.1.48
+  - dependency-name: scikit-image
+    versions:
+    - 0.18.1
+  - dependency-name: requests
+    versions:
+    - 2.25.1
+  - dependency-name: toml
+    versions:
+    - 0.10.2
