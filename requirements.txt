@@ -4,6 +4,6 @@ scikit-image==0.18.1
 opencv_python==4.5.1.48
 numpy==1.20.1
 rsa==4.7.2
-playwright==1.9.1
+playwright==1.11.1
 aiohttp==3.7.4post0
 aiojobs==0.3.0
